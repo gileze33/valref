@@ -1,0 +1,22 @@
+{
+  "name": "valref",
+  "version": "1.0.0",
+  "description": "Time analysis tool",
+  "type": "module",
+  "scripts": {
+    "analyse": "node src/analyseTimeSpent.js",
+    "calendar": "node src/getCalendarEvents.js",
+    "merged-mrs": "node src/getMergedMRs.js",
+    "monday-tasks": "node src/getMondayTasks.js",
+    "granola-notes": "node src/getGranolaNotes.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.7",
+    "date-fns": "^3.3.1",
+    "dotenv": "^16.4.5",
+    "googleapis": "^133.0.0",
+    "node-fetch": "^3.3.2",
+    "yargs": "^17.7.2"
+  },
+  "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
+}

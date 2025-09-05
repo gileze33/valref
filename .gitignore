@@ -1,0 +1,7 @@
+node_modules/
+.env
+credentials.json
+token.json
+analysis-prompt.txt
+analysis-prompt.old.txt
+current-key-projects.txt
