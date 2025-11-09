@@ -17,8 +17,9 @@ const argv = yargs(hideBin(process.argv))
   .help()
   .argv;
 
-// Granola API endpoint
-const GRANOLA_API_BASE = 'https://api.granola.ai/v1';
+// Granola API endpoints
+const GRANOLA_API_V1 = 'https://api.granola.ai/v1';
+const GRANOLA_API_V2 = 'https://api.granola.ai/v2';
 
 async function getGranolaCredentials() {
   try {
@@ -45,49 +46,53 @@ async function getGranolaCredentials() {
   }
 }
 
+async function fetchDocumentTranscript(accessToken, documentId) {
+  try {
+    const response = await fetch(`${GRANOLA_API_V1}/get-document-transcript`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        document_id: documentId
+      })
+    });
+    
+    if (!response.ok) {
+      return null;
+    }
+    
+    const data = await response.json();
+    return data.transcript || data || null;
+  } catch (error) {
+    return null;
+  }
+}
+
 async function fetchGranolaNotes(accessToken, startDate) {
   try {
-    // Try different possible endpoints based on the logs we found
-    const endpoints = [
-      '/get-documents',
-      '/documents',
-      '/get-meeting-notes',
-      '/meetings'
-    ];
+    // Use v2 API endpoint as discovered in the Granola-to-Obsidian code
+    const response = await fetch(`${GRANOLA_API_V2}/get-documents`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        limit: 100,
+        offset: 0,
+        include_last_viewed_panel: true  // This is the key parameter!
+      })
+    });
     
-    let response;
-    let data;
-    
-    for (const endpoint of endpoints) {
-      try {
-        console.log(`Trying endpoint: ${GRANOLA_API_BASE}${endpoint}`);
-        response = await fetch(`${GRANOLA_API_BASE}${endpoint}`, {
-          method: 'POST', // Changed to POST based on logs
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({}) // Empty body for now
-        });
-        
-        if (response.ok) {
-          data = await response.json();
-          console.log(`Success with endpoint: ${endpoint}`);
-          break;
-        } else {
-          console.log(`Failed with endpoint ${endpoint}: ${response.status}`);
-        }
-      } catch (err) {
-        console.log(`Error with endpoint ${endpoint}: ${err.message}`);
-      }
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status}`);
     }
     
-    if (!data) {
-      throw new Error('Could not fetch data from any endpoint');
-    }
+    const responseData = await response.json();
+    let data = responseData.docs || responseData || [];
     
-    // Debug: log the data structure
-    console.log('API Response structure:', JSON.stringify(data, null, 2).substring(0, 500) + '...');
     
     // Parse start date and create interval
     const start = startOfDay(parseISO(startDate));
@@ -97,7 +102,7 @@ async function fetchGranolaNotes(accessToken, startDate) {
     const documents = data.documents || data.meetings || data.notes || data || [];
     const notesList = Array.isArray(documents) ? documents : [];
     
-    console.log(`Found ${notesList.length} total notes`);
+    // Found notes
     
     // Filter notes by date - try different date fields
     const filteredNotes = notesList.filter(doc => {
@@ -111,7 +116,6 @@ async function fetchGranolaNotes(accessToken, startDate) {
       ].filter(Boolean);
       
       if (possibleDates.length === 0) {
-        console.log('Note without date:', JSON.stringify(doc).substring(0, 200));
         return false;
       }
       
@@ -129,12 +133,77 @@ async function fetchGranolaNotes(accessToken, startDate) {
       return false;
     });
 
-    console.log(`Filtered to ${filteredNotes.length} notes in date range`);
+    // Fetch transcripts for each document (optional - not all meetings have transcripts)
+    for (const note of filteredNotes) {
+      if (note.id) {
+        note.transcript = await fetchDocumentTranscript(accessToken, note.id);
+      }
+    }
+    
     return filteredNotes;
   } catch (error) {
     console.error('Error fetching Granola notes:', error.message);
     throw error;
   }
+}
+
+function extractNotesContent(notes) {
+  // Extract text content from the nested notes structure
+  const textContent = [];
+  
+  if (!notes || !notes.content) {
+    return '';
+  }
+  
+  function extractTextFromBlock(block) {
+    if (!block) return;
+    
+    // Handle text directly in the block
+    if (block.text) {
+      textContent.push(block.text);
+    }
+    
+    // Handle various block types
+    if (block.type === 'paragraph' || block.type === 'heading') {
+      if (block.content && Array.isArray(block.content)) {
+        for (const item of block.content) {
+          if (item.type === 'text' && item.text) {
+            textContent.push(item.text);
+          } else {
+            // Recursively extract from nested blocks
+            extractTextFromBlock(item);
+          }
+        }
+      }
+    } else if (block.type === 'bulletList' || block.type === 'orderedList') {
+      // Note: ProseMirror uses camelCase for list types
+      if (block.content && Array.isArray(block.content)) {
+        for (const listItem of block.content) {
+          extractTextFromBlock(listItem);
+        }
+      }
+    } else if (block.type === 'listItem') {
+      if (block.content && Array.isArray(block.content)) {
+        for (const item of block.content) {
+          extractTextFromBlock(item);
+        }
+      }
+    } else if (block.type === 'blockquote' || block.type === 'codeBlock') {
+      if (block.content && Array.isArray(block.content)) {
+        for (const item of block.content) {
+          extractTextFromBlock(item);
+        }
+      }
+    }
+  }
+  
+  if (Array.isArray(notes.content)) {
+    for (const block of notes.content) {
+      extractTextFromBlock(block);
+    }
+  }
+  
+  return textContent.join(' ').trim();
 }
 
 function formatNotes(notes) {
@@ -144,10 +213,12 @@ function formatNotes(notes) {
   }
 
   console.log('\nGranola Meeting Notes');
-  console.log('----------------------------------------');
+  console.log('========================================\n');
   
-  notes.forEach((note) => {
-    console.log('Title:', note.title || 'Untitled Meeting');
+  notes.forEach((note, index) => {
+    // Title
+    console.log(`Meeting ${index + 1}: ${note.title || 'Untitled Meeting'}`);
+    console.log('----------------------------------------');
     
     // Find and format the date
     const possibleDates = [
@@ -173,27 +244,69 @@ function formatNotes(notes) {
       console.log('Attendees:', note.attendees.join(', '));
     }
     
-    // Extract summary from notes content if available
-    if (note.summary) {
-      console.log('Summary:', note.summary);
-    } else if (note.notes && note.notes.content) {
-      // Try to extract a brief summary from the first few content blocks
-      const textContent = [];
-      for (const block of note.notes.content.slice(0, 3)) {
-        if (block.content) {
-          for (const item of block.content) {
-            if (item.text) {
-              textContent.push(item.text);
-            }
-          }
-        }
-      }
-      if (textContent.length > 0) {
-        console.log('First lines:', textContent.slice(0, 2).join(' ').substring(0, 200) + '...');
+    // Print meeting duration if available
+    if (note.duration) {
+      console.log('Duration:', note.duration);
+    }
+    
+    console.log('\nMeeting Notes:');
+    console.log('--------------');
+    
+    // Extract full meeting notes content
+    let notesContent = '';
+    
+    // First try the last_viewed_panel field (from v2 API)
+    if (note.last_viewed_panel && note.last_viewed_panel.content) {
+      notesContent = extractNotesContent(note.last_viewed_panel);
+    } else if (note.notes_plain) {
+      notesContent = note.notes_plain;
+    } else if (note.summary) {
+      notesContent = note.summary;
+    } else if (note.notes) {
+      notesContent = extractNotesContent(note.notes);
+    } else if (note.content) {
+      // Sometimes the content might be at the top level
+      notesContent = extractNotesContent({ content: note.content });
+    } else if (note.text) {
+      notesContent = note.text;
+    }
+    
+    // Check for transcript first (full meeting content)
+    if (note.transcript) {
+      console.log('TRANSCRIPT:');
+      if (Array.isArray(note.transcript)) {
+        // Format transcript entries
+        const formattedTranscript = note.transcript
+          .map(entry => `${entry.source === 'microphone' ? 'You' : 'Other'}: ${entry.text}`)
+          .join('\n');
+        console.log(formattedTranscript);
+      } else if (typeof note.transcript === 'string') {
+        console.log(note.transcript);
+      } else {
+        console.log(JSON.stringify(note.transcript, null, 2));
       }
     }
     
-    console.log('----------------------------------------');
+    if (notesContent && notesContent.trim()) {
+      // Clean up and format the content
+      console.log('SUMMARY:');
+      console.log(notesContent.trim());
+    }
+    
+    // If no transcript or summary content
+    if (!note.transcript && (!notesContent || !notesContent.trim())) {
+      console.log('[No notes content available]');
+    }
+    
+    // Add attendees from google calendar event if available
+    if (note.google_calendar_event && note.google_calendar_event.attendees) {
+      console.log('\nAttendees:');
+      note.google_calendar_event.attendees.forEach(attendee => {
+        console.log(`- ${attendee.displayName || attendee.email}${attendee.organizer ? ' (Organizer)' : ''}`);
+      });
+    }
+    
+    console.log('\n========================================\n');
   });
 }
 

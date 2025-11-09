@@ -150,6 +150,7 @@ async function listEvents(auth, startDate) {
     });
   } catch (error) {
     console.error('Error fetching calendar events:', error, error?.response?.data?.error);
+    process.exit(1);
   }
 }
 
@@ -167,4 +168,7 @@ const argv = yargs(hideBin(process.argv))
 // Main execution
 authorize()
   .then(auth => listEvents(auth, argv.startDate))
-  .catch(console.error); 
+  .catch(error => {
+    console.error(error);
+    process.exit(1);
+  }); 

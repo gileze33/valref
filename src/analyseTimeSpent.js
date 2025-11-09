@@ -57,7 +57,7 @@ async function getCurrentKeyProjects() {
   }
 }
 
-async function analyzeThroughChatGPT(calendarOutput, mrsOutput, mondayTasksOutput, granolaOutput, keyProjects) {
+async function analyzeThroughChatGPT(calendarOutput, mrsOutput, mondayTasksOutput, todoItemsOutput, granolaOutput, keyProjects) {
   const openai = axios.create({
     baseURL: 'https://api.openai.com/v1',
     headers: {
@@ -82,6 +82,9 @@ ${mrsOutput}
 
 Monday.com tasks:
 ${mondayTasksOutput}
+
+TODO app tasks:
+${todoItemsOutput}
 
 Granola meeting notes:
 ${granolaOutput}`;
@@ -137,6 +140,8 @@ async function main() {
     const mrsOutput = await getCommandOutput(`yarn merged-mrs ${dateArg}`);
     console.log(`Fetching Monday.com tasks...`);
     const mondayTasksOutput = await getCommandOutput(`yarn monday-tasks ${dateArg}`);
+    console.log(`Fetching TODO app tasks...`);
+    const todoItemsOutput = await getCommandOutput(`yarn todo-items ${dateArg}`);
     console.log(`Fetching Granola meeting notes...`);
     const granolaOutput = await getCommandOutput(`yarn granola-notes ${dateArg}`);
 
@@ -145,7 +150,7 @@ async function main() {
 
     // Analyze through ChatGPT
     console.log(`Analysing...`);
-    const analysis = await analyzeThroughChatGPT(calendarOutput, mrsOutput, mondayTasksOutput, granolaOutput, keyProjects);
+    const analysis = await analyzeThroughChatGPT(calendarOutput, mrsOutput, mondayTasksOutput, todoItemsOutput, granolaOutput, keyProjects);
     
     // Output the analysis
     console.log('\n\nTime Analysis:\n');

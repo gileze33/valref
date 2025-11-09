@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { format, parseISO, startOfDay, endOfDay } from 'date-fns';
+import { format, parseISO, startOfDay } from 'date-fns';
 import fetch from 'node-fetch';
 
 dotenv.config();
@@ -129,6 +129,7 @@ async function fetchTodoItems(startDate) {
 
   } catch (error) {
     console.error('Error fetching Monday.com TODO items:', error.message);
+    process.exit(1);
   }
 }
 
