@@ -6,16 +6,12 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import dotenv from 'dotenv';
 import { endOfDay, format, parseISO, startOfDay } from 'date-fns';
-import readlineLib from 'readline';
 
 dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// If modifying these scopes, delete token.json.
-const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
 const TOKEN_PATH = path.join(__dirname, '..', 'token.json');
-const CREDENTIALS_PATH = path.join(__dirname, '..', 'credentials.json');
 
 async function loadSavedCredentialsIfExist() {
   try {
@@ -27,67 +23,16 @@ async function loadSavedCredentialsIfExist() {
   }
 }
 
-async function saveCredentials(client) {
-  const content = await fs.readFile(CREDENTIALS_PATH);
-  const keys = JSON.parse(content);
-  const key = keys.installed || keys.web;
-  const payload = {
-    type: 'authorized_user',
-    client_id: key.client_id,
-    client_secret: key.client_secret,
-    refresh_token: client.credentials.refresh_token,
-  };
-  await fs.writeFile(TOKEN_PATH, JSON.stringify(payload));
-}
-
 async function authorize() {
-  let client = await loadSavedCredentialsIfExist();
-  if (client) {
-    return client;
+  const client = await loadSavedCredentialsIfExist();
+
+  if (!client) {
+    console.error('Error: No valid authentication token found.');
+    console.error('Please run: yarn calendar-auth');
+    process.exit(1);
   }
 
-  // Load client secrets from a local file.
-  const content = await fs.readFile(CREDENTIALS_PATH);
-  const keys = JSON.parse(content);
-  const key = keys.installed || keys.web;
-
-  const oAuth2Client = new google.auth.OAuth2(
-    key.client_id,
-    key.client_secret,
-    key.redirect_uris[0]
-  );
-
-  // Generate an authentication URL
-  const authUrl = oAuth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: SCOPES,
-    // This will force the consent screen to appear every time,
-    // ensuring we get a refresh token
-    prompt: 'consent'
-  });
-
-  console.log('Authorize this app by visiting this url:', authUrl);
-  
-  // Wait for the authorization code from the user
-  const code = await new Promise((resolve) => {
-    const readline = readlineLib.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    readline.question('Enter the code from that page here: ', (code) => {
-      readline.close();
-      resolve(code);
-    });
-  });
-
-  // Get both access and refresh tokens
-  const { tokens } = await oAuth2Client.getToken(code);
-  oAuth2Client.setCredentials(tokens);
-
-  // Save the credentials for later use
-  await saveCredentials(oAuth2Client);
-  
-  return oAuth2Client;
+  return client;
 }
 
 async function listEvents(auth, startDate) {
@@ -149,6 +94,12 @@ async function listEvents(auth, startDate) {
       console.log('----------------------------------------');
     });
   } catch (error) {
+    // Check if this is an authentication error
+    if (error.code === 401 || error.message?.includes('invalid_grant') || error.message?.includes('Token has been expired or revoked')) {
+      console.error('Error: Authentication token is invalid or expired.');
+      console.error('Please run: yarn calendar-auth');
+      process.exit(1);
+    }
     console.error('Error fetching calendar events:', error, error?.response?.data?.error);
     process.exit(1);
   }

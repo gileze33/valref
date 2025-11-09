@@ -6,6 +6,7 @@
   "scripts": {
     "analyse": "node src/analyseTimeSpent.js",
     "calendar": "node src/getCalendarEvents.js",
+    "calendar-auth": "node src/calendar-auth.js",
     "merged-mrs": "node src/getMergedMRs.js",
     "monday-tasks": "node src/getMondayTasks.js",
     "granola-notes": "node src/getGranolaNotes.js",

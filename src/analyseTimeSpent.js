@@ -1,4 +1,4 @@
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import axios from 'axios';
 import yargs from 'yargs';
@@ -31,6 +31,49 @@ async function getCommandOutput(command) {
   } catch (error) {
     throw new Error(`Command execution failed: ${error.message}`);
   }
+}
+
+async function runCommandWithStreamingOutput(command) {
+  return new Promise((resolve, reject) => {
+    // Parse the command into parts
+    const parts = command.split(' ');
+    const cmd = parts[0];
+    const args = parts.slice(1);
+
+    const child = spawn(cmd, args, {
+      stdio: ['inherit', 'pipe', 'pipe'],
+      shell: true
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    // Stream stdout to console and collect it
+    child.stdout.on('data', (data) => {
+      const text = data.toString();
+      process.stdout.write(text);
+      stdout += text;
+    });
+
+    // Stream stderr to console and collect it
+    child.stderr.on('data', (data) => {
+      const text = data.toString();
+      process.stderr.write(text);
+      stderr += text;
+    });
+
+    child.on('error', (error) => {
+      reject(new Error(`Command execution failed: ${error.message}`));
+    });
+
+    child.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Command exited with code ${code}`));
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
 }
 
 async function getAnalysisPrompt() {
@@ -129,6 +172,10 @@ const argv = yargs(hideBin(process.argv))
 
 async function main() {
   try {
+    // Ensure we have valid Google Calendar authentication
+    console.log('Checking Google Calendar authentication...');
+    await runCommandWithStreamingOutput('yarn calendar-auth');
+
     // Build commands based on input
     // Now always use startDate (which defaults to this Monday)
     const dateArg = `-s "${argv.startDate}"`;
