@@ -10,6 +10,7 @@
     "merged-mrs": "node src/getMergedMRs.js",
     "monday-tasks": "node src/getMondayTasks.js",
     "granola-notes": "node src/getGranolaNotes.js",
+    "granola-upload": "node src/uploadGranolaTranscriptions.js",
     "todo-items": "node src/getTodoItems.js"
   },
   "dependencies": {

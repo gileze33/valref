@@ -60,10 +60,12 @@ async function listEvents(auth, startDate) {
     }
 
     // Filter events to ensure they start after the specified date
+    // Also filter out events titled "Office"
     const filteredEvents = events.filter(event => {
       const eventStart = new Date(event.start.dateTime || event.start.date);
       const today = endOfDay(new Date()); // Get END of today
-      return eventStart >= parsedDate && eventStart <= today;
+      const isLocationEvent = event.summary === 'Office' || event.summary === 'Home';
+      return eventStart >= parsedDate && eventStart <= today && !isLocationEvent;
     });
 
     if (filteredEvents.length === 0) {
@@ -77,16 +79,21 @@ async function listEvents(auth, startDate) {
     filteredEvents.forEach((event) => {
       const start = event.start.dateTime || event.start.date;
       const end = event.end.dateTime || event.end.date;
-      const attendees = event.attendees 
+      const attendees = event.attendees
         ? event.attendees
             .filter(a => !a.resource) // Filter out resource (room) attendees
             .map(a => a.email)
             .join(', ')
         : 'No other attendees';
-      
+
+      // Find the current user's response status
+      const selfAttendee = event.attendees?.find(a => a.self);
+      const myResponse = selfAttendee?.responseStatus || 'unknown';
+
       console.log('Title:', event.summary);
       console.log('Start:', format(new Date(start), 'yyyy-MM-dd HH:mm'));
       console.log('End:', format(new Date(end), 'yyyy-MM-dd HH:mm'));
+      console.log('My Response:', myResponse);
       console.log('Participants:', attendees);
       if (event.description) {
         console.log('Description:', event.description);
