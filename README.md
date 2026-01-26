@@ -60,3 +60,36 @@ npm run analyse -- -s 2025-09-01
 - `npm run merged-mrs` - Fetch merged GitLab MRs
 - `npm run monday-tasks` - Fetch Monday.com tasks
 - `npm run granola-notes` - Fetch Granola meeting notes
+- `npm run granola-upload` - Upload Granola transcriptions to TODO app
+- `npm run todo-items` - Fetch TODO items
+
+## Scheduled Granola Upload (macOS)
+
+A launch agent is included to automatically upload Granola transcriptions every 30 minutes.
+
+### Setup
+
+1. Copy the plist to LaunchAgents:
+```bash
+cp com.valref.granola-upload.plist ~/Library/LaunchAgents/
+```
+
+2. Ensure your `~/.zshrc` exports `TODOG_KEY` and sets up node/yarn (e.g., via nvm)
+
+3. Create the logs directory:
+```bash
+mkdir -p ~/dev/valref/logs
+```
+
+4. Load the agent:
+```bash
+launchctl load ~/Library/LaunchAgents/com.valref.granola-upload.plist
+```
+
+### Management
+```bash
+launchctl start com.valref.granola-upload   # Run immediately
+launchctl stop com.valref.granola-upload    # Stop current run
+launchctl unload ~/Library/LaunchAgents/com.valref.granola-upload.plist  # Disable
+tail -f logs/granola-upload.log             # View logs
+```

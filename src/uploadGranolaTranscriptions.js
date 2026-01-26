@@ -31,11 +31,6 @@ async function uploadTranscriptions(notes) {
     raw_data: note
   }));
 
-  // const note = notes.find(note => note.id === '444ef89d-10cf-4cd9-b109-a39a565b08a1');
-
-  // console.log(JSON.stringify(note, null, 2));
-  // process.exit(0);
-
   const response = await fetch(TODO_API_ENDPOINT, {
     method: 'POST',
     headers: {
